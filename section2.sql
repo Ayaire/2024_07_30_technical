@@ -24,7 +24,9 @@ SELECT
     indv.tran_id,
     indv.cmte_id AS filer_id,
     COALESCE(can.state,can_cmt.state) AS filer_state,
+    COALESCE(can.cand_id,can_cmt.cand_id) AS candidate_id,
     COALESCE(can.cand_name,can_cmt.cand_name) AS candidate,
+    COALESCE(can.cand_office,can_cmt.cand_office) AS office,
     indv.unique_donor,
     indv.state AS donor_state,
     indv.transaction_amt,
@@ -61,6 +63,13 @@ FROM (
       DISTINCT
       cand_id,
       cand_name,
+      CASE 
+        WHEN cand_office = 'S' THEN 'Senate'
+        WHEN cand_office = 'H' THEN 'House'
+        WHEN cand_office = 'P' THEN 'President'
+        WHEN cand_office = '' OR cand_office IS NULL THEN 'Unknown'
+        ELSE cand_office
+        END AS cand_office,
       CASE WHEN cand_office_st IN("US","") OR cand_office_st IS NULL THEN cand_st ELSE cand_office_st END AS state
     FROM `bigquery-public-data.fec.cn20` 
     -- We only want to look at Senate races for this
@@ -73,7 +82,15 @@ FROM (
   SELECT
       DISTINCT
       cand_pcc,
+      cand_id,
       cand_name,
+      CASE 
+        WHEN cand_office = 'S' THEN 'Senate'
+        WHEN cand_office = 'H' THEN 'House'
+        WHEN cand_office = 'P' THEN 'President'
+        WHEN cand_office = '' OR cand_office IS NULL THEN 'Unknown'
+        ELSE cand_office
+        END AS cand_office,
       CASE WHEN cand_office_st IN("US","") OR cand_office_st IS NULL THEN cand_st ELSE cand_office_st END AS state
     FROM `bigquery-public-data.fec.cn20` 
     WHERE EXISTS (
@@ -103,60 +120,58 @@ Totals by
     candidate state
 */
 SELECT
-    filer_id,
+    candidate_id,
     candidate,
     office,
-    state,
-    SUM(donations) AS donations,
-    SUM(donors) AS donors,
-    MAX(avg_cont)avg_cont,
-    MAX(median_cont_to_can) AS median_cont,
+    filer_state,
+    SUM(transaction_amt) AS donations,
+    COUNT(DISTINCT unique_donor) AS donors,
+    SUM(transaction_amt) AS contributions,
     -- Take a look at the donations by various donor types
     SUM(ind_cont) AS ind_cont,
     SUM(pac_cont) AS pac_cont,
     SUM(org_cont) AS org_cont,
-    SUM(can_contD) AS can_cont,
+    SUM(can_cont) AS can_cont,
     SUM(com_cont) AS com_cont,
     SUM(ccm_cont) AS ccm_cont,
     SUM(pty_cont) AS pty_cont,
     SUM(unknown_cont) AS unknown_cont
 FROM out_of_state_contributions
 GROUP BY 
-    cmte_id,
+    candidate_id,
     candidate,
     office,
-    state
+    filer_state
 ;
 
 /* TABBLE #2
 Includes aggregation by donor state
 */
 SELECT
-    filer_id,
+    candidate_id,
     candidate,
     office,
-    state,
+    filer_state,
     donor_state,
-    SUM(donations) AS donations,
-    SUM(donors) AS donors,
-    MAX(avg_cont)avg_cont,
-    MAX(median_cont_to_can) AS median_cont,
-    MAX(total_to_can_by_donor_state) AS total_from_state,
-    SUM(total_cont) as total_cont,
+    COUNT(DISTINCT unique_donor) AS donors,
+    SUM(transaction_amt) AS contributions,
+    MAX(median_cont_to_can) AS overall_median_cont_to_can,
+    MAX(total_to_can_by_donor_state) AS total_to_can_by_donor_state,
+    MAX(total_cont_by_donor_state) AS total_cont_by_donor_state,
     -- Take a look at the donations by various donor types
     SUM(ind_cont) AS ind_cont,
     SUM(pac_cont) AS pac_cont,
     SUM(org_cont) AS org_cont,
-    SUM(can_contD) AS can_cont,
+    SUM(can_cont) AS can_cont,
     SUM(com_cont) AS com_cont,
     SUM(ccm_cont) AS ccm_cont,
     SUM(pty_cont) AS pty_cont,
     SUM(unknown_cont) AS unknown_cont
 FROM out_of_state_contributions
 GROUP BY 
-    cmte_id,
+    candidate_id,
     candidate,
     office,
-    state,
+    filer_state,
     donor_state
 ;
